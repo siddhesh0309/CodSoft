@@ -56,3 +56,15 @@ for status in df_merged["Status of Account"].dropna().unique():
     print(f"✅ Saved: {filename}")
 
 print("🎯 All done.")
+
+
+
+# Write headers in row 8 to avoid merged cells in row 4
+for col_idx, col_name in enumerate(df_merged.columns, start=1):
+    ws.cell(row=8, column=col_idx, value=col_name)
+
+# Write data starting from row 9
+for row_idx, row in enumerate(df_merged.itertuples(index=False, name=None), start=9):
+    for col_idx, value in enumerate(row, start=1):
+        ws.cell(row=row_idx, column=col_idx, value=value
+
