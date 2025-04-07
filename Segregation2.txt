@@ -1,0 +1,91 @@
+import pandas as pd
+import os
+from openpyxl import load_workbook
+
+# File paths
+template_file = "template.xlsm"
+mapping_file = "mapping.xlsx"
+output_folder = "segregated_occupation_files"
+
+# Step 1: Load template headers from row 4, data from row 9
+print("🔄 Loading template data from row 9 (headers in row 4)...")
+df_full = pd.read_excel(template_file, sheet_name="Account Holder", header=3, engine="openpyxl")
+df = df_full.iloc[5:].reset_index(drop=True)
+
+# Step 2: Load mapping file
+print("🔄 Loading mapping file...")
+df_mapping = pd.read_excel(mapping_file)
+
+# Step 3: Merge Occupation, GHO Code, Status of Account
+df = df.merge(df_mapping[["Account Number", "Occupation", "GHO Code", "Status of Account"]],
+              on="Account Number", how="left")
+
+# Step 4: Define TIN columns
+tin_columns = ["Foreign_TIN"] + [f"Foreign_TIN{i}" for i in range(2, 9)]
+tin_columns = [col for col in tin_columns if col in df.columns]
+
+# Step 5: Dependent category logic
+def resolve_dependent(row):
+    occ = str(row["Occupation"]).strip().lower()
+    gho = str(row.get("GHO Code")).strip().upper()
+
+    if occ in ["housewife", "student"]:
+        return "Dependent"
+    if gho in ["MRS", "PBM"]:
+        return "Dependent"
+    return row["Occupation"]
+
+df["Occupation"] = df.apply(resolve_dependent, axis=1)
+
+# Step 6: Sea Fearer logic
+def is_all_tin_blank_or_dummy(row):
+    return all((pd.isna(row[col]) or row[col] == "AAAAAAAAA") for col in tin_columns)
+
+df["Occupation"] = df.apply(
+    lambda row: "Sea Fearer" if is_all_tin_blank_or_dummy(row) else row["Occupation"],
+    axis=1
+)
+
+# Step 7: Blank occupation if non-IN TIN and SC = Y
+def has_non_indian_tin(row):
+    for i in range(8):
+        col = f"TIN_Issuing_Country{i+1}" if i > 0 else "TIN_Issuing_Country"
+        if col in df.columns and pd.notna(row[col]) and row[col] != "IN":
+            return True
+    return False
+
+df["Occupation"] = df.apply(
+    lambda row: "" if row.get("SC") == "Y" and has_non_indian_tin(row) else row["Occupation"],
+    axis=1
+)
+
+# Step 8: Write back to template (starting at row 9)
+print("✍️ Writing back into template with headers preserved...")
+wb = load_workbook(template_file, keep_vba=True)
+ws = wb["Account Holder"]
+
+# Clear old data from row 9 down
+for row in ws.iter_rows(min_row=9, max_row=ws.max_row):
+    for cell in row:
+        cell.value = None
+
+# Write updated data starting from row 9
+for row_idx, row in enumerate(df.itertuples(index=False), start=9):
+    for col_idx, value in enumerate(row, start=1):
+        ws.cell(row=row_idx, column=col_idx, value=value)
+
+wb.save(template_file)
+print(f"✅ Template file updated: {template_file}")
+
+# Step 9: Segregate by Occupation
+os.makedirs(output_folder, exist_ok=True)
+
+print("📂 Creating segregated files by Occupation...")
+for occupation, group in df.groupby("Occupation"):
+    safe_name = occupation if pd.notna(occupation) and occupation.strip() != "" else "Unknown"
+    safe_name = safe_name.replace(" ", "_").replace("/", "_")
+    filename = f"{output_folder}/{safe_name}_accounts.xlsx"
+    group.to_excel(filename, index=False)
+    print(f"✅ Saved: {filename}")
+
+print("🎯 Completed segregation by Occupation.")
