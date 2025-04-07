@@ -1,0 +1,58 @@
+import pandas as pd
+from openpyxl import load_workbook
+import os
+
+template_path = "template.xlsm"
+mapping_path = "mapping.xlsx"
+output_folder = "segregated_by_status"
+
+# Step 1: Load data from template (headers at row 4, data from row 9)
+print("🔄 Reading template file...")
+df_template = pd.read_excel(template_path, sheet_name="Account Holder", engine="openpyxl", header=3, skiprows=[4, 5, 6, 7, 8])
+
+# Step 2: Load mapping file
+print("🔄 Reading mapping file...")
+df_mapping = pd.read_excel(mapping_path, dtype=str)
+
+# Step 3: Merge mapping on Account Number
+required_columns = {"Account Number", "Occupation", "GHO Code", "Status of Account"}
+if not required_columns.issubset(df_mapping.columns):
+    raise ValueError(f"❌ Mapping file is missing: {required_columns - set(df_mapping.columns)}")
+
+print("🔗 Merging mapping data...")
+df_merged = df_template.merge(df_mapping[["Account Number", "Occupation", "GHO Code", "Status of Account"]],
+                              on="Account Number", how="left")
+
+# Step 4: Write updated data to template from row 9 (no headers)
+print("💾 Writing merged data into template...")
+wb = load_workbook(template_path, keep_vba=True)
+ws = wb["Account Holder"]
+
+# Clear existing data rows (starting from row 9)
+for row in ws.iter_rows(min_row=9, max_row=ws.max_row):
+    for cell in row:
+        cell.value = None
+
+# Write new data back from row 9
+for r_idx, row in df_merged.itertuples(index=False, name=None):
+    for c_idx, value in enumerate(row, start=1):
+        ws.cell(row=r_idx + 9, column=c_idx, value=value)
+
+# Update header row (row 4) if needed — optional
+for i, col in enumerate(df_merged.columns, start=1):
+    ws.cell(row=4, column=i, value=col)
+
+wb.save(template_path)
+print(f"✅ Template updated: {template_path}")
+
+# Step 5: Create segregated files by Status of Account
+print("📁 Creating segregated files by Status of Account...")
+os.makedirs(output_folder, exist_ok=True)
+
+for status in df_merged["Status of Account"].dropna().unique():
+    df_filtered = df_merged[df_merged["Status of Account"] == status]
+    filename = os.path.join(output_folder, f"{status}_accounts.xlsx")
+    df_filtered.to_excel(filename, index=False)
+    print(f"✅ Saved: {filename}")
+
+print("🎯 All done.")
