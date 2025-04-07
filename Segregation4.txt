@@ -1,0 +1,101 @@
+import pandas as pd
+import os
+from openpyxl import load_workbook
+
+# File paths
+template_file = "template.xlsm"
+mapping_file = "mapping.xlsx"
+output_folder = "segregated_occupation_files"
+
+# Step 1: Read headers from row 4, data from row 9
+print("🔄 Loading template data from row 9 (headers in row 4)...")
+df_full = pd.read_excel(template_file, sheet_name="Account Holder", header=3, engine="openpyxl")
+df = df_full.iloc[5:].reset_index(drop=True)
+
+# Step 2: Load mapping file
+print("🔄 Loading mapping file...")
+df_mapping = pd.read_excel(mapping_file)
+
+# Step 3: Merge only needed fields
+df = df.merge(df_mapping[["Account Number", "Occupation", "GHO Code", "Status of Account"]],
+              on="Account Number", how="left", suffixes=("", "_mapped"))
+
+# Step 4: Setup TIN columns
+tin_columns = ["Foreign_TIN"] + [f"Foreign_TIN{i}" for i in range(2, 9)]
+tin_country_columns = ["TIN_Issuing_Country"] + [f"TIN_Issuing_Country{i}" for i in range(2, 9)]
+tin_columns = [col for col in tin_columns if col in df.columns]
+tin_country_columns = [col for col in tin_country_columns if col in df.columns]
+
+# Step 5: Final occupation logic
+def determine_final_occupation(row):
+    # Sea Fearer check
+    all_dummy_or_blank = all(
+        pd.isna(row.get(col)) or row.get(col) == "AAAAAAAAA" for col in tin_columns
+    )
+    if all_dummy_or_blank:
+        return "Sea Fearer"
+
+    # Blank if SC = Y and TIN ≠ IN
+    if row.get("SC") == "Y":
+        for tin_col, country_col in zip(tin_columns, tin_country_columns):
+            if pd.notna(row.get(tin_col)) and row[tin_col] != "AAAAAAAAA":
+                if pd.notna(row.get(country_col)) and row[country_col] != "IN":
+                    return ""
+
+    # Dependent logic
+    occ = str(row.get("Occupation_mapped", "")).strip().lower()
+    gho = str(row.get("GHO Code_mapped", "")).strip().upper()
+
+    if occ in ["housewife", "student", "minor account"]:
+        return "Dependent"
+    if gho in ["MRS", "PBM"]:
+        return "Dependent"
+
+    return row.get("Occupation_mapped", "")
+
+df["Occupation_final"] = df.apply(determine_final_occupation, axis=1)
+
+# Step 6: Load workbook and access sheet
+print("✍️ Updating or inserting required columns...")
+wb = load_workbook(template_file, keep_vba=True)
+ws = wb["Account Holder"]
+
+# Ensure required headers exist in row 4
+required_columns = ["Occupation", "GHO Code", "Status of Account"]
+header_row = 4
+headers = [cell.value for cell in ws[header_row]]
+col_map = {}
+
+for col_name in required_columns:
+    if col_name in headers:
+        col_map[col_name] = headers.index(col_name) + 1
+    else:
+        # Add column at the end
+        new_col_index = len(headers) + 1
+        ws.cell(row=header_row, column=new_col_index).value = col_name
+        col_map[col_name] = new_col_index
+        headers.append(col_name)
+        print(f"➕ Added missing column: {col_name} at position {new_col_index}")
+
+# Step 7: Write only the 3 updated columns from row 9
+for i, row in enumerate(df.itertuples(index=False), start=9):
+    ws.cell(row=i, column=col_map["Occupation"], value=row.Occupation_final)
+    ws.cell(row=i, column=col_map["GHO Code"], value=row._asdict().get("GHO Code_mapped"))
+    ws.cell(row=i, column=col_map["Status of Account"], value=row._asdict().get("Status of Account_mapped"))
+
+wb.save(template_file)
+print(f"✅ Template updated with Occupation, GHO Code, Status of Account: {template_file}")
+
+# Step 8: Segregate by Occupation
+os.makedirs(output_folder, exist_ok=True)
+
+print("📂 Creating segregated files by Occupation...")
+df["Occupation_final"] = df["Occupation_final"].fillna("").astype(str)
+for occupation, group in df.groupby("Occupation_final"):
+    safe_name = occupation if occupation.strip() else "Unknown"
+    safe_name = safe_name.replace(" ", "_").replace("/", "_")
+    filename = f"{output_folder}/{safe_name}_accounts.xlsx"
+    group.to_excel(filename, index=False)
+    print(f"✅ Saved: {filename}")
+
+print("🎯 Process completed successfully.")
