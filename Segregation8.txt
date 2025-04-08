@@ -100,3 +100,42 @@ for idx in df_sea.index:
 print("✅ Sea Fearer logic applied only to relevant rows.")
 
 
+
+
+
+
+
+
+
+
+# Step 1: Sea Fearer Mask
+sea_mask = df_merged["Occupation"].str.strip().str.lower() == "sea fearer"
+df_sea = df_merged[sea_mask].copy()
+
+# Step 2: Define Foreign TIN and TIN Issuing Country columns
+tin_cols = ["Foreign_TIN"] + [f"Foreign_TIN{i}" for i in range(2, 9)]
+tin_issuing_cols = ["TIN_Issuing_Country"] + [f"TIN_Issuing_Country{i}" for i in range(2, 9)]
+
+# Step 3: Determine if row has any TIN or dummy TIN
+has_tin_or_dummy = df_sea[tin_cols].apply(
+    lambda row: any(str(val).strip() not in ["", "nan"] for val in row if pd.notna(val)),
+    axis=1
+)
+
+# Step 4: Determine if any TIN country ≠ IN
+has_foreign_country = df_sea[tin_issuing_cols].apply(
+    lambda row: any(str(val).strip().upper() != "IN" and str(val).strip() != "" for val in row if pd.notna(val)),
+    axis=1
+)
+
+# Step 5: Apply logic correctly
+for idx in df_sea.index:
+    sc_value = str(df_merged.at[idx, "SC"]).strip().upper()
+    if not has_tin_or_dummy.loc[idx] and has_foreign_country.loc[idx] and sc_value == "Y":
+        df_merged.at[idx, "Occupation"] = ""
+    else:
+        df_merged.at[idx, "Occupation"] = "Sea Fearer"
+
+
+
+
