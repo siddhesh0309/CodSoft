@@ -139,3 +139,74 @@ for idx in df_sea.index:
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import List
+from datetime import datetime
+import requests
+
+app = FastAPI()
+
+UAT_API_ENDPOINT = ""
+HEADERS = {"Content-Type": "application/json"}
+
+# Pydantic models
+class PANData(BaseModel):
+    pan: str
+    name: str
+    fathername: str
+    dob: str  # Format: dd-mm-yyyy
+
+class PANRequest(BaseModel):
+    User_ID: str
+    Records_count: int
+    Request_time: str
+    Transaction_ID: str
+    Version: str
+    inputData: List[PANData]
+    signature: str
+
+@app.post("/verify_pan/")
+def verify_pan(request: PANRequest):
+    payload = {
+        "header": {
+            "User_ID": request.User_ID,
+            "Records_count": request.Records_count,
+            "Request_time": request.Request_time,
+            "Transaction_ID": request.Transaction_ID,
+            "Version": request.Version
+        },
+        "request": {
+            "inputData": [data.dict() for data in request.inputData],
+            "signature": request.signature
+        }
+    }
+
+    # Sending to UAT endpoint (use PROD when ready)
+    try:
+        response = requests.post(UAT_API_ENDPOINT, json=payload, headers=HEADERS, verify=False)
+        return {"status_code": response.status_code, "response": response.json()}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+
+
+
+
+
