@@ -210,3 +210,47 @@ def verify_pan(request: PANRequest):
 
 
 
+
+
+
+
+
+
+
+
+
+# Step 4: Apply corrected Sea-Fearer logic
+print("⚙️ Applying corrected Sea-Fearer occupation logic...")
+
+sea_mask = df_merged["Occupation"].str.strip().str.lower().str.startswith("sea-fearer")
+df_sea = df_merged[sea_mask].copy()
+
+tin_cols = ["Foreign_TIN"] + [f"Foreign_TIN{i}" for i in range(2, 9)]
+tin_issuing_cols = ["TIN_Issuing_Country"] + [f"TIN_Issuing_Country{i}" for i in range(2, 9)]
+
+for idx, row in df_sea.iterrows():
+    should_blank = False
+    for tin_col, country_col in zip(tin_cols, tin_issuing_cols):
+        country = str(row.get(country_col, "")).strip().upper()
+        tin = str(row.get(tin_col, "")).strip().upper()
+        
+        if country and country != "IN":
+            if tin and tin != "AAAAAAAAA":
+                should_blank = True
+                break
+    
+    if should_blank:
+        df_merged.at[idx, "Occupation"] = ""
+    else:
+        df_merged.at[idx, "Occupation"] = "Sea-Fearer"
+
+print("✅ Sea-Fearer logic applied correctly.")
+
+
+
+
+
+
+
+
+
