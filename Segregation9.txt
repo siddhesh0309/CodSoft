@@ -99,3 +99,46 @@ for idx, row in merged_df.iterrows():
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+print("⚙️ Applying 'Sea Fearer' occupation rule...")
+
+for idx, row in merged_df.iterrows():
+    occ = str(row.get("Occupation", "")).strip().lower()
+    
+    if occ.startswith("sea fearer"):
+        valid_foreign_tin_found = False
+
+        for i in range(9):  # Loop through Foreign_TIN to Foreign_TIN8
+            ftin_col = f"Foreign_TIN{'' if i == 0 else i}"
+            tin_col = f"TIN_Issuing_Country{'' if i == 0 else i}"
+
+            tin_country = str(row.get(tin_col, "")).strip().upper()
+            foreign_tin = str(row.get(ftin_col, "")).strip().upper()
+
+            if tin_country == "" or tin_country == "IN":
+                continue  # Skip if blank or Indian
+
+            if foreign_tin not in ["", "AAAAAAAAA"]:
+                valid_foreign_tin_found = True
+                break  # No need to check further
+
+        if valid_foreign_tin_found:
+            merged_df.at[idx, "Occupation"] = ""
+
+
+
+
