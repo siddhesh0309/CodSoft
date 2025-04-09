@@ -69,3 +69,33 @@ for status in merged_df["Status of Account"].dropna().unique():
     print(f"   - {status}: {len(status_df)} records saved to {output_path}")
 
 print("🎯 All done.")
+
+
+
+
+
+
+# Apply Sea Fearer logic
+print("⚙️ Applying 'Sea Fearer' occupation rule...")
+for idx, row in merged_df.iterrows():
+    occ = str(row.get("Occupation", "")).strip().lower()
+    if occ.startswith("sea fearer"):
+        keep_seafarer = True
+        for i in range(9):  # Handles Foreign_TIN + TIN_Issuing_Country through Foreign_TIN8 + TIN_Issuing_Country8
+            ftin_col = f"Foreign_TIN{'' if i == 0 else i}"
+            tin_col = f"TIN_Issuing_Country{'' if i == 0 else i}"
+
+            foreign_tin = str(row.get(ftin_col, "")).strip().upper()
+            tin_country = str(row.get(tin_col, "")).strip().upper()
+
+            if tin_country and tin_country != "IN":
+                if foreign_tin and foreign_tin != "AAAAAAAAA":
+                    keep_seafarer = False
+                    break
+
+        if not keep_seafarer:
+            merged_df.at[idx, "Occupation"] = ""
+
+
+
+
