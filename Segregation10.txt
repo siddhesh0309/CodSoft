@@ -1,0 +1,74 @@
+import pandas as pd
+import os
+from openpyxl import load_workbook
+
+# File paths
+template_file = "template.xlsm"
+mapping_file = "mapping_file.xlsx"
+output_dir = "segregated_by_status"
+os.makedirs(output_dir, exist_ok=True)
+
+# Load template data from row 9 (headers in row 4)
+print("🔄 Reading template data...")
+template_df = pd.read_excel(template_file, sheet_name="Account Holder", engine="openpyxl", header=None, skiprows=8)
+headers = pd.read_excel(template_file, sheet_name="Account Holder", engine="openpyxl", nrows=1, skiprows=3).columns.tolist()
+template_df.columns = headers
+
+# Load mapping file
+print("🔄 Loading mapping file...")
+mapping_df = pd.read_excel(mapping_file, engine="openpyxl")[["Account Number", "Occupation", "GHO Code", "Status of Account"]]
+
+# Merge based on Account Number
+print("🔗 Merging Occupation, GHO Code, and Status...")
+merged_df = template_df.merge(mapping_df, on="Account Number", how="left")
+
+# Apply Sea Fearer logic correctly
+print("⚙️ Applying 'Sea Fearer' occupation rule...")
+for idx, row in merged_df.iterrows():
+    occ = str(row.get("Occupation", "")).strip().lower()
+    
+    if occ.startswith("sea fearer"):
+        valid_foreign_tin_found = False
+
+        for i in range(9):  # i = 0 to 8
+            ftin_col = f"Foreign_TIN{'' if i == 0 else i}"
+            tin_col = f"TIN_Issuing_Country{'' if i == 0 else i}"
+
+            foreign_tin = str(row.get(ftin_col, "")).strip().upper()
+            tin_country = str(row.get(tin_col, "")).strip().upper()
+
+            if tin_country and tin_country != "IN":
+                if foreign_tin and foreign_tin != "AAAAAAAAA":
+                    valid_foreign_tin_found = True
+                    break  # Stop checking further
+
+        if valid_foreign_tin_found:
+            merged_df.at[idx, "Occupation"] = ""
+
+# Write updated data back to template
+print("✍️ Writing updated data back to template...")
+workbook = load_workbook(template_file, keep_vba=True)
+sheet = workbook["Account Holder"]
+
+# Add new column headers in row 4
+new_columns = ["Occupation", "GHO Code", "Status of Account"]
+for i, col in enumerate(new_columns, start=len(headers) + 1):
+    sheet.cell(row=4, column=i, value=col)
+
+# Write updated data rows starting from row 9
+for row_idx, row in enumerate(merged_df.itertuples(index=False), start=9):
+    for col_idx, value in enumerate(row, start=1):
+        sheet.cell(row=row_idx, column=col_idx, value=value)
+
+workbook.save(template_file)
+print("✅ Template updated with Sea Fearer logic and new columns.")
+
+# Create segregated files by Status of Account
+print("📂 Creating segregated files by 'Status of Account'...")
+for status in merged_df["Status of Account"].dropna().unique():
+    status_df = merged_df[merged_df["Status of Account"] == status]
+    output_path = os.path.join(output_dir, f"{status.replace(' ', '_')}.xlsx")
+    status_df.to_excel(output_path, index=False)
+    print(f"   - {status}: {len(status_df)} records saved to {output_path}")
+
+print("🎯 All done.")
