@@ -111,3 +111,33 @@ mapping_df.loc[mapping_df["GHO Code"].isin(["MRS", "PBM"]), "Occupation"] = "DEP
 mapping_df.loc[mapping_df["Status of Account"].isin(["2", "3"]), "Occupation"] = "INACTIVE"
 
 
+
+
+
+
+
+
+
+# Clean all TIN-related columns before logic
+print("🧹 Cleaning TIN and Country fields...")
+
+for i in range(9):
+    ftin_col = f'Foreign_TIN{"" if i == 0 else i}'
+    tin_col = f'TIN_Issuing_Country{"" if i == 0 else i}'
+
+    for col in [ftin_col, tin_col]:
+        if col in merged_df.columns:
+            merged_df[col] = (
+                merged_df[col]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+                .replace({'NAN': '', 'NONE': '', 'NaN': '', 'nan': ''})
+                .fillna('')
+            )
+
+
+
+
+
+
