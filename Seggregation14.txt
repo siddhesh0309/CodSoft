@@ -38,3 +38,20 @@ for row_idx, row in enumerate(merged_df.itertuples(index=False), start=9):
 # Save the updated file
 workbook.save(template_file)
 print("✅ Fields added and template saved.")
+
+
+
+
+# Standardize text for comparison
+mapping_df["Occupation"] = mapping_df["Occupation"].astype(str).str.strip().str.upper()
+mapping_df["GHO Code"] = mapping_df["GHO Code"].astype(str).str.strip().str.upper()
+
+# Apply logic:
+# 1. If Occupation is HOUSEWIFE or STUDENT → DEPENDENT
+# 2. If GHO Code is MRS or PBM → DEPENDENT (overrides)
+print("⚙️ Applying occupation rules...")
+mapping_df.loc[mapping_df["Occupation"].isin(["HOUSEWIFE", "STUDENT"]), "Occupation"] = "DEPENDENT"
+mapping_df.loc[mapping_df["GHO Code"].isin(["MRS", "PBM"]), "Occupation"] = "DEPENDENT"
+
+
+
