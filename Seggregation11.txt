@@ -72,3 +72,37 @@ for status in merged_df["Status of Account"].dropna().unique():
     print(f"   - {status}: {len(status_df)} records saved to {output_path}")
 
 print("🎯 Process completed successfully!")
+
+
+
+
+
+
+
+
+# Sea Fearer logic: column-by-column checking
+def validate_sea_fearer(row):
+    if str(row['Occupation']).strip().lower() != 'sea fearer':
+        return row['Occupation']
+
+    for i in range(9):  # Checks Foreign_TIN + TIN_Issuing_Country pairs one by one
+        tin_col = f'TIN_Issuing_Country{"" if i == 0 else i}'
+        ftin_col = f'Foreign_TIN{"" if i == 0 else i}'
+
+        if tin_col not in row or ftin_col not in row:
+            continue  # Skip if column missing
+
+        issuing_country = str(row.get(tin_col, '')).strip().upper()
+        foreign_tin = str(row.get(ftin_col, '')).strip().upper()
+
+        if issuing_country and issuing_country != 'IN':
+            if foreign_tin and foreign_tin != 'AAAAAAAAA':
+                return ''  # Found valid foreign TIN → blank occupation
+
+    return 'Sea Fearer'  # No valid foreign TIN found → keep
+
+
+
+
+
+
