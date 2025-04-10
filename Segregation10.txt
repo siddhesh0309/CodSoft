@@ -72,3 +72,54 @@ for status in merged_df["Status of Account"].dropna().unique():
     print(f"   - {status}: {len(status_df)} records saved to {output_path}")
 
 print("🎯 All done.")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+print("⚙️ Applying 'Sea Fearer' occupation rule (clean + rewrite)...")
+
+for idx, row in merged_df.iterrows():
+    occ = str(row.get("Occupation", "")).strip().lower()
+
+    if occ.startswith("sea fearer"):
+        valid_foreign_tin_found = False
+
+        for i in range(9):  # Loop from 0 to 8
+            ftin_col = f"Foreign_TIN{'' if i == 0 else i}"
+            tin_col = f"TIN_Issuing_Country{'' if i == 0 else i}"
+
+            if ftin_col not in merged_df.columns or tin_col not in merged_df.columns:
+                continue
+
+            foreign_tin = str(row.get(ftin_col, "")).strip().upper()
+            tin_country = str(row.get(tin_col, "")).strip().upper()
+
+            if not foreign_tin and not tin_country:
+                continue  # Skip empty pair
+
+            if tin_country and tin_country != "IN":
+                if foreign_tin and foreign_tin != "AAAAAAAAA":
+                    valid_foreign_tin_found = True
+                    break
+
+        # Update occupation explicitly
+        if valid_foreign_tin_found:
+            merged_df.at[idx, "Occupation"] = ""
+        else:
+            merged_df.at[idx, "Occupation"] = "Sea Fearer"
+
+
+
+
+
+
