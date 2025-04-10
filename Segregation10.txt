@@ -123,3 +123,75 @@ for idx, row in merged_df.iterrows():
 
 
 
+
+
+
+
+
+
+
+import pandas as pd
+
+# File paths
+input_file = "input.xlsx"
+old_file = "old_file.xlsx"
+
+# Load Excel files
+df_input = pd.read_excel(input_file)
+df_old = pd.read_excel(old_file)
+
+# Merge based on Account Number to bring Occupation, Status, GHO Code
+merged_df = df_input.merge(
+    df_old[['Account Number', 'Occupation', 'Status', 'GHO Code']],
+    on='Account Number',
+    how='left'
+)
+
+# Apply 'Sea Fearer' occupation rule
+print("⚙️ Applying 'Sea Fearer' occupation rule (final logic)...")
+
+for idx, row in merged_df.iterrows():
+    occ = str(row.get("Occupation", "")).strip().lower()
+
+    if occ.startswith("sea fearer") or occ.startswith("sea-fearer"):
+        valid_foreign_tin_found = False
+
+        for i in range(0, 8):  # Handles Foreign_TIN, Foreign_TIN2 to Foreign_TIN8
+            if i == 0:
+                ftin_col = "Foreign_TIN"
+                tin_col = "TIN_Issuing_Country"
+            else:
+                ftin_col = f"Foreign_TIN{i+1}"
+                tin_col = f"TIN_Issuing_Country{i+1}"
+
+            # Skip if columns don't exist
+            if ftin_col not in merged_df.columns or tin_col not in merged_df.columns:
+                continue
+
+            foreign_tin = str(row.get(ftin_col, "")).strip().upper()
+            tin_country = str(row.get(tin_col, "")).strip().upper()
+
+            # Ignore if country is IN or both values are blank
+            if tin_country == "IN" or (not tin_country and not foreign_tin):
+                continue
+
+            # Found valid TIN for a foreign country
+            if foreign_tin and foreign_tin != "AAAAAAAAA":
+                valid_foreign_tin_found = True
+                break
+
+        # Final Occupation assignment
+        merged_df.at[idx, "Occupation"] = "" if valid_foreign_tin_found else "Sea Fearer"
+
+# Save final result
+output_file = "output_with_sea_fearer_logic.xlsx"
+merged_df.to_excel(output_file, index=False)
+print(f"✅ Output saved to: {output_file}")
+
+
+
+
+
+
+
+
