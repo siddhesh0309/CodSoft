@@ -141,3 +141,31 @@ for i in range(9):
 
 
 
+def handle_seafarer(row):
+    if str(row.get('Occupation', '')).strip().upper() != "SEAFARER":
+        return row.get('Occupation', '')
+
+    for i in range(9):
+        ftin_col = 'Foreign_TIN' if i == 0 else f'Foreign_TIN{i}'
+        tin_col = 'TIN_Issuing_Country' if i == 0 else f'TIN_Issuing_Country{i}'
+
+        tin_value = str(row.get(ftin_col, '') or '').strip().upper()
+        tin_country = str(row.get(tin_col, '') or '').strip().upper()
+
+        print(f"Checking pair: {tin_col}={tin_country}, {ftin_col}={tin_value}")
+
+        if tin_country and tin_country != 'IN':
+            if tin_value and tin_value != 'AAAAAAAAA':
+                print(f"→ Valid TIN found for foreign country: {tin_country} ({tin_value}) → blanking SEAFARER")
+                return ''  # Valid foreign TIN found → remove SEAFARER
+
+    return 'SEAFARER'  # All foreign countries had dummy/blank TINs → keep
+
+
+
+
+
+
+
+
+
