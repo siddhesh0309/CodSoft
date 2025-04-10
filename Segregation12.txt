@@ -1,0 +1,79 @@
+import pandas as pd
+import os
+from openpyxl import load_workbook
+
+# File paths
+template_file = "template.xlsm"
+mapping_file = "mapping_file.xlsx"
+output_dir = "segregated_by_status"
+os.makedirs(output_dir, exist_ok=True)
+
+# Load template data from row 9 (headers in row 4)
+print("🔄 Reading template data...")
+template_df = pd.read_excel(template_file, sheet_name="Account Holder", engine="openpyxl", header=None, skiprows=8)
+headers = pd.read_excel(template_file, sheet_name="Account Holder", engine="openpyxl", nrows=1, skiprows=3).columns.tolist()
+template_df.columns = headers
+
+# Load mapping file
+print("🔄 Loading mapping file...")
+mapping_df = pd.read_excel(mapping_file, engine="openpyxl")[["Account Number", "Occupation", "GHO Code", "Status of Account"]]
+
+# Merge based on Account Number
+print("🔗 Merging Occupation, GHO Code, and Status...")
+merged_df = template_df.merge(mapping_df, on="Account Number", how="left")
+
+# Define TIN and Issuing Country column lists (updated to match your actual column names)
+tin_cols = ['foreign tin'] + [f'foreign tin{i}' for i in range(2, 9)]
+issuing_cols = ['tin issuing country'] + [f'tin issuing country{i}' for i in range(2, 9)]
+
+# Define Sea Ferar validation function (updated logic)
+def validate_sea_ferar(row):
+    if str(row['Occupation']).strip().lower() != 'sea ferar':
+        return row['Occupation']
+
+    for ic, tc in zip(issuing_cols, tin_cols):
+        issuing_country = str(row.get(ic, '')).strip().upper()
+        foreign_tin = str(row.get(tc, '')).strip()
+        
+        # Skip if columns don't exist in the row
+        if ic not in row or tc not in row:
+            continue
+            
+        # If any non-IN country has valid TIN (not blank and not AAAAAAAAA)
+        if issuing_country and issuing_country != 'IN':
+            if foreign_tin and foreign_tin != 'AAAAAAAAA':
+                return ''  # Clear occupation if valid foreign TIN found
+    
+    return 'sea ferar'  # Keep if all TINs are blank/AAAAAAAAA or for IN country
+
+# Apply Sea Ferar logic
+print("⚙️ Applying 'sea ferar' occupation logic...")
+merged_df['Occupation'] = merged_df.apply(validate_sea_ferar, axis=1)
+
+# Write back to template.xlsm
+print("✍️ Writing updated data to template...")
+workbook = load_workbook(template_file, keep_vba=True)
+sheet = workbook["Account Holder"]
+
+# Add headers in row 4
+new_columns = ["Occupation", "GHO Code", "Status of Account"]
+for i, col in enumerate(new_columns, start=len(headers) + 1):
+    sheet.cell(row=4, column=i, value=col)
+
+# Write rows starting from row 9
+for row_idx, row in enumerate(merged_df.itertuples(index=False), start=9):
+    for col_idx, value in enumerate(row, start=1):
+        sheet.cell(row=row_idx, column=col_idx, value=value)
+
+workbook.save(template_file)
+print("✅ Template updated with new occupation logic.")
+
+# Create segregated files by Status of Account
+print("📂 Creating segregated files by 'Status of Account'...")
+for status in merged_df["Status of Account"].dropna().unique():
+    status_df = merged_df[merged_df["Status of Account"] == status]
+    output_path = os.path.join(output_dir, f"{status.replace(' ', '_')}.xlsx")
+    status_df.to_excel(output_path, index=False)
+    print(f"   - {status}: {len(status_df)} records saved to {output_path}")
+
+print("🎯 Process completed successfully!")
