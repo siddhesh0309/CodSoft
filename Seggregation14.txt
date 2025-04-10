@@ -1,0 +1,40 @@
+import pandas as pd
+from openpyxl import load_workbook
+
+# File paths
+template_file = "template.xlsm"
+mapping_file = "mapping_file.xlsx"
+
+# Load data from template
+print("🔄 Reading template...")
+template_df = pd.read_excel(template_file, sheet_name="Account Holder", engine="openpyxl", header=None, skiprows=8)
+headers = pd.read_excel(template_file, sheet_name="Account Holder", engine="openpyxl", nrows=1, skiprows=3).columns.tolist()
+template_df.columns = headers
+
+# Load mapping file (Occupation, GHO Code, Status of Account)
+print("🔄 Loading mapping file...")
+mapping_df = pd.read_excel(mapping_file, engine="openpyxl")[["Account Number", "Occupation", "GHO Code", "Status of Account"]]
+
+# Merge selected columns into the template
+print("🔗 Merging fields into template...")
+merged_df = template_df.merge(mapping_df, on="Account Number", how="left")
+
+# Write updated fields back to template
+print("✍️ Writing merged fields back to template...")
+workbook = load_workbook(template_file, keep_vba=True)
+sheet = workbook["Account Holder"]
+
+# Set column headers at row 4 for new fields
+start_col_index = len(headers) + 1
+new_fields = ["Occupation", "GHO Code", "Status of Account"]
+for i, col_name in enumerate(new_fields):
+    sheet.cell(row=4, column=start_col_index + i, value=col_name)
+
+# Write values starting from row 9
+for row_idx, row in enumerate(merged_df.itertuples(index=False), start=9):
+    for i, col_name in enumerate(new_fields):
+        sheet.cell(row=row_idx, column=start_col_index + i, value=getattr(row, col_name.replace(" ", "_")))
+
+# Save the updated file
+workbook.save(template_file)
+print("✅ Fields added and template saved.")
