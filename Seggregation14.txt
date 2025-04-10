@@ -55,3 +55,59 @@ mapping_df.loc[mapping_df["GHO Code"].isin(["MRS", "PBM"]), "Occupation"] = "DEP
 
 
 
+
+
+
+
+def handle_seafarer(row):
+    if str(row['Occupation']).strip().upper() != "SEAFARER":
+        return row['Occupation']
+
+    for i in range(9):
+        tin_col = f'TIN_Issuing_Country{"" if i == 0 else i}'
+        ftin_col = f'Foreign_TIN{"" if i == 0 else i}'
+
+        tin_country = str(row.get(tin_col, '')).strip().upper()
+        tin_value = str(row.get(ftin_col, '')).strip().upper()
+
+        # If TIN Issuing Country is NOT IN and TIN is valid (not blank or AAAAAAAAA)
+        if tin_country and tin_country != 'IN' and tin_value and tin_value != 'AAAAAAAAA':
+            return ''  # Clear occupation if valid foreign TIN exists
+
+    return 'SEAFARER'  # Keep if all foreign TINs are blank or AAAAAAAAA
+
+# Apply SeaFarer logic
+print("⚓ Applying SeaFarer occupation logic...")
+mapping_df["Occupation"] = mapping_df.apply(handle_seafarer, axis=1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Standardize text for comparison
+mapping_df["Occupation"] = mapping_df["Occupation"].astype(str).str.strip().str.upper()
+mapping_df["GHO Code"] = mapping_df["GHO Code"].astype(str).str.strip().str.upper()
+mapping_df["Status of Account"] = mapping_df["Status of Account"].astype(str).str.strip()
+
+# Apply occupation logic:
+print("⚙️ Applying occupation rules...")
+
+# 1. HOUSEWIFE or STUDENT → DEPENDENT
+mapping_df.loc[mapping_df["Occupation"].isin(["HOUSEWIFE", "STUDENT"]), "Occupation"] = "DEPENDENT"
+
+# 2. GHO Code is MRS or PBM → DEPENDENT (overrides)
+mapping_df.loc[mapping_df["GHO Code"].isin(["MRS", "PBM"]), "Occupation"] = "DEPENDENT"
+
+# 3. Status of Account is 2 or 3 → INACTIVE
+mapping_df.loc[mapping_df["Status of Account"].isin(["2", "3"]), "Occupation"] = "INACTIVE"
+
+
